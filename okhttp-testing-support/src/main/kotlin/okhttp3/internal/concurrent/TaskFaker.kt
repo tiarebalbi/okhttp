@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:Suppress("INVISIBLE_MEMBER", "INVISIBLE_REFERENCE")
+
 package okhttp3.internal.concurrent
 
 import assertk.assertThat
@@ -23,9 +25,9 @@ import java.util.concurrent.BlockingQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
-import kotlin.concurrent.withLock
 import okhttp3.OkHttpClient
 import okhttp3.TestUtil.threadFactory
+import okhttp3.internal.connection.Locks.withLock
 
 /**
  * Runs a [TaskRunner] in a controlled environment so that everything is sequential and
@@ -170,7 +172,7 @@ class TaskFaker : Closeable {
   fun advanceUntil(newTime: Long) {
     taskRunner.assertThreadDoesntHoldLock()
 
-    taskRunner.lock.withLock {
+    taskRunner.withLock {
       check(currentTask == TestThreadSerialTask)
       nanoTime = newTime
       yieldUntil(ResumePriority.AfterOtherTasks)
@@ -181,7 +183,7 @@ class TaskFaker : Closeable {
   fun assertNoMoreTasks() {
     taskRunner.assertThreadDoesntHoldLock()
 
-    taskRunner.lock.withLock {
+    taskRunner.withLock {
       assertThat(activeThreads).isEqualTo(0)
     }
   }
@@ -211,7 +213,7 @@ class TaskFaker : Closeable {
   fun runNextTask() {
     taskRunner.assertThreadDoesntHoldLock()
 
-    taskRunner.lock.withLock {
+    taskRunner.withLock {
       val contextSwitchCountBefore = contextSwitchCount
       yieldUntil(ResumePriority.BeforeOtherTasks) {
         contextSwitchCount > contextSwitchCountBefore
@@ -221,7 +223,7 @@ class TaskFaker : Closeable {
 
   /** Sleep until [durationNanos] elapses. For use by the task threads. */
   fun sleep(durationNanos: Long) {
-    taskRunner.lock.withLock {
+    taskRunner.withLock {
       val sleepUntil = nanoTime + durationNanos
       yieldUntil { nanoTime >= sleepUntil }
     }
@@ -233,7 +235,7 @@ class TaskFaker : Closeable {
    */
   fun yield() {
     taskRunner.assertThreadDoesntHoldLock()
-    taskRunner.lock.withLock {
+    taskRunner.withLock {
       yieldUntil()
     }
   }
@@ -332,7 +334,7 @@ class TaskFaker : Closeable {
           runnable.run()
           require(currentTask == this) { "unexpected current task: $currentTask" }
         } finally {
-          taskRunner.lock.withLock {
+          taskRunner.withLock {
             activeThreads--
             startNextTask()
           }
@@ -358,12 +360,12 @@ class TaskFaker : Closeable {
       timeout: Long,
       unit: TimeUnit,
     ): T? {
-      taskRunner.lock.withLock {
+      return taskRunner.withLock {
         val waitUntil = nanoTime + unit.toNanos(timeout)
         while (true) {
           val result = poll()
-          if (result != null) return result
-          if (nanoTime >= waitUntil) return null
+          if (result != null) return@withLock result
+          if (nanoTime >= waitUntil) return@withLock null
           val editCountBefore = editCount
           yieldUntil { nanoTime >= waitUntil || editCount > editCountBefore }
         }
@@ -371,7 +373,7 @@ class TaskFaker : Closeable {
     }
 
     override fun put(element: T) {
-      taskRunner.lock.withLock {
+      taskRunner.withLock {
         delegate.put(element)
         editCount++
       }

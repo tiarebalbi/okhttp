@@ -78,6 +78,15 @@ jobs:
           distribution: 'zulu'
           java-version: 17
 
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: 'graalvm'
+          java-version: 21
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+          native-image-job-reports: true
+          components: 'native-image'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -115,7 +124,7 @@ jobs:
 
       - name: Publish Test Report
         if: github.repository == 'square/okhttp' && github.ref == 'refs/heads/master'
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v5
         with:
           report_paths: '**/build/test-results/*/TEST-*.xml'
           check_name: OpenJDK 11 Test Report
@@ -446,20 +455,26 @@ jobs:
           distribution: 'zulu'
           java-version: 17
 
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: 'graalvm'
+          java-version: 21
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
+          native-image-job-reports: true
+          components: 'native-image'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build okcurl
-        run: ./gradlew okcurl:nativeImage
+        run: ./gradlew okcurl:nativeBuild
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build ConsoleLauncher
-        run: ./gradlew -PgraalBuild=true native-image-tests:nativeImage
-
-      - name: Run Checks
-        run: ./native-image-tests/build/graal/ConsoleLauncher
+      - name: Run native-image tests
+        run: ./gradlew -PgraalBuild=true native-image-tests:nativeTest
 
   testandroid:
     runs-on: ubuntu-latest
@@ -503,7 +518,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Gradle cache
-        run: ./gradlew -PandroidBuild=true :okhttp-android:test
+        run: ./gradlew -PandroidBuild=true :android-test:test
 
       - name: AVD cache
         uses: actions/cache@v4
@@ -530,7 +545,7 @@ jobs:
         with:
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.api-level == '34' && 'x86_64' || 'x86' }}
-          script: ./gradlew -PandroidBuild=true :okhttp-android:connectedCheck :android-test:connectedCheck
+          script: ./gradlew -PandroidBuild=true :android-test:connectedCheck
         env:
           API_LEVEL: ${{ matrix.api-level }}
 
